@@ -10,38 +10,35 @@ async function main() {
 
   // Middleware
   app.use(bodyParser.json());
+  app.use(express.static('public')); // Serve the beautiful frontend UI
   app.use(pinoHttp({
     transport: {
       target: 'pino-pretty',
-      options: {
-        colorize: true
-      }
+      options: { colorize: true }
     }
   }));
 
   // Input Validation Schema
   const QuerySchema = z.object({
-    image_url: z.string().url("Must be a valid URL")
+    image_url: z.string().url("Must be a valid URL"),
+    filter: z.enum(['grayscale', 'blur', 'invert', 'sepia', 'none']).optional().default('grayscale'),
+    width: z.coerce.number().min(50).max(2000).optional().default(500),
+    height: z.coerce.number().min(50).max(2000).optional().default(500)
   });
 
-  // Healthcheck / Root
-  app.get('/', (_req, res) => {
-    res.status(200).json({
-      message: 'Welcome to the High-Performance Image Filter Microservice',
-      endpoints: [
-        'GET /filteredimage?image_url={public_url}'
-      ]
-    });
+  // Healthcheck API
+  app.get('/api/health', (_req, res) => {
+    res.status(200).json({ status: 'ok', version: '2.0.0' });
   });
 
   // Primary Processing Endpoint
   app.get('/filteredimage', async (req: express.Request, res: express.Response) => {
     try {
       // 1. Validate Input using Zod
-      const { image_url } = QuerySchema.parse(req.query);
+      const { image_url, filter, width, height } = QuerySchema.parse(req.query);
 
       // 2. Process Image (Fetch + Sharp)
-      const filePath = await filterImageFromURL(image_url);
+      const filePath = await filterImageFromURL(image_url, filter, width, height);
 
       // 3. Send File and Cleanup asynchronously
       res.status(200).sendFile(filePath, (err) => {

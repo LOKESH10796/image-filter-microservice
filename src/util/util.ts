@@ -11,7 +11,12 @@ import crypto from 'crypto';
  * @param inputURL - The public URL of the image to process.
  * @returns A Promise resolving to the absolute file path of the processed image.
  */
-export async function filterImageFromURL(inputURL: string): Promise<string> {
+export async function filterImageFromURL(
+  inputURL: string, 
+  filter: string = 'grayscale',
+  width: number = 256,
+  height: number = 256
+): Promise<string> {
   // Fetch the image as an ArrayBuffer
   const response = await fetch(inputURL);
   if (!response.ok) {
@@ -26,14 +31,24 @@ export async function filterImageFromURL(inputURL: string): Promise<string> {
   const outpath = path.join(os.tmpdir(), filename);
 
   // Process image natively with high-performance Sharp (libvips)
-  // Replaces legacy Jimp implementation for ~40x speed increase
-  await sharp(buffer)
-    .resize(256, 256, {
-      fit: sharp.fit.cover,
-      position: sharp.strategy.entropy
-    })
-    .grayscale()
-    .jpeg({ quality: 60 })
+  let imagePipeline = sharp(buffer).resize(width, height, {
+    fit: sharp.fit.cover,
+    position: sharp.strategy.entropy
+  });
+
+  // Apply dynamic filters
+  if (filter === 'grayscale') {
+    imagePipeline = imagePipeline.grayscale();
+  } else if (filter === 'blur') {
+    imagePipeline = imagePipeline.blur(5);
+  } else if (filter === 'invert') {
+    imagePipeline = imagePipeline.negate();
+  } else if (filter === 'sepia') {
+    imagePipeline = imagePipeline.tint({ r: 112, g: 66, b: 20 });
+  }
+
+  await imagePipeline
+    .jpeg({ quality: 80 })
     .toFile(outpath);
 
   return outpath;
